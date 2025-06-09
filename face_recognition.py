@@ -1,75 +1,79 @@
-import cv2
+import os
 import face_recognition
 from sklearn.neighbors import KNeighborsClassifier
-import numpy as np
+import cv2
+class FaceAuthenticator:
+    def __init__(self,folder_name='/Users/learnx/Desktop/project4',threshold=0.6):
+        self.folder_name=folder_name
+        self.threshold=threshold
+        self.model=KNeighborsClassifier(n_neighbors=1)
+        self.train_model()
+        self.trained=False
+    def train_model(self): 
+        x=[]
+        y=[]
+        try:
+              for preson_name in os.listdir(self.folder_name):
+                  sub_fold_path=os.path.join(self.folder_name,preson_name)
+                  print(preson_name)
+                  if not os.path.isdir(sub_fold_path):
+                     print("come")
+                     continue  
+                  for image_path in os.listdir(sub_fold_path):
+                     print(image_path)
+                     image_path=os.path.join(sub_fold_path,image_path)
+                     print(image_path)
+                     if not image_path.lower().endswith(('.png', '.jpg', '.jpeg')):
+                        continue
 
-known_image1 = face_recognition.load_image_file(r"/Users/learnx/Downloads/WhatsApp Image 2025-06-06 at 20.30.46.jpeg")
-face_location1 = face_recognition.face_locations(known_image1, model='hog')
-face_encoding1 = face_recognition.face_encodings(known_image1, face_location1)
-known_image2 = face_recognition.load_image_file(r"/Users/learnx/Downloads/WhatsApp Image 2025-06-06 at 20.30.46 (1).jpeg")
-face_location2 = face_recognition.face_locations(known_image2, model='hog')
-face_encoding2 = face_recognition.face_encodings(known_image2, face_location2)
-known_image3 = face_recognition.load_image_file(r"/Users/learnx/Downloads/WhatsApp Image 2025-06-06 at 20.30.46 (2).jpeg")
-face_location3 = face_recognition.face_locations(known_image3, model='hog')
-face_encoding3 = face_recognition.face_encodings(known_image3, face_location3)
-known_image4 = face_recognition.load_image_file(r"/Users/learnx/Downloads/download.jpeg")
-face_location4 = face_recognition.face_locations(known_image4, model='hog')
-face_encoding4 = face_recognition.face_encodings(known_image4, face_location4)
-known_image5 = face_recognition.load_image_file(r"/Users/learnx/Downloads/WhatsApp Image 2025-06-05 at 17.38.04.jpeg")
-face_location5 = face_recognition.face_locations(known_image5, model='hog')
-face_encoding5 = face_recognition.face_encodings(known_image5, face_location5)
-
-
-#if not (face_encoding1 |face_encoding2|face_encoding3|face_location4|face_encoding5):
-    # print("No face found in known image")
-    
-
-face_encoding1 = face_encoding1[0]
-face_encoding2 = face_encoding2[0]
-face_encoding3=face_encoding3[0]
-face_encoding4=face_encoding4[0]
-face_encoding5=face_encoding5[0]
-
-x = [face_encoding1,face_encoding2,face_encoding3,face_encoding5,face_encoding4]
-y = ['bill gates','ronaldo','trump','obama','khan']
-
-model = KNeighborsClassifier(n_neighbors=1)
-model.fit(x, y)
-def face_rec(frame,coff_):
-    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    frame_rgb_location = face_recognition.face_locations(frame_rgb, model='hog')
-    frame_rgb_encoding = face_recognition.face_encodings(frame_rgb, frame_rgb_location)
-
-    if not frame_rgb_encoding:
-        print("No face found in webcam frame")
-        return frame  
-    test_encoding = frame_rgb_encoding[0]
-    for (top, right, bottom, left), test_encoding in zip(frame_rgb_location, frame_rgb_encoding):
-        clst_dist, _ = model.kneighbors([test_encoding], n_neighbors=1)
-        if clst_dist[0][0] > coff_:
-            name = "not verified"
+                     image=face_recognition.load_image_file(image_path)
+                     location=face_recognition.face_locations(image)
+                     encoding=face_recognition.face_encodings(image,location)
+                     print(encoding)
+                     if encoding:
+                        x.append([encoding[0]]) 
+                        y.append(preson_name) 
+                     else:
+                      print("image not found")
+        except Exception as e:
+         print(f"[Error] While reading known faces: {e}")  
+         if x and y:       
+          self.model.fit(x,y)
+          self.trained=True
+          
+         else: 
+             print("not found")
+    def face_rec(self,frame):
+        if not self.trained :
+            print("not train")
+        
+        frame_rgb=cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
+        frame_rgb_location=face_recognition.face_locations(frame_rgb)
+        frame_rgb_encoding=face_recognition.face_encodings(frame_rgb,frame_rgb_location)
+        
+        for (top,right,bottom,left),encoding in zip(frame_rgb_location,frame_rgb_encoding):
+            clst_=self.model.kneighbors([encoding])[0][0]
+            if clst_[0][0]<self.threshold:
+                name=self.model.predict([encoding])[0]
+            else:
+                name="not verified"
+            cv2.rectangle(frame,(left,top),(right,bottom),(0,255,0),2) 
+            cv2.putText(frame,name,(left,top - 10),cv2.FONT_HERSHEY_SIMPLEX,0.9,(0,255,0),2)
+        return frame       
+if  __name__=="__main__" :
+    recognizer= FaceAuthenticator()  
+    cap=cv2.VideoCapture(0)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH,640)   
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT,480) 
+             
+    while True:
+        ret,image=cap.read()
+        if not ret:
+            print("not web cam open")
         else:
-            name = model.predict([test_encoding])[0]
-        cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
-        cv2.putText(frame, name, (left, top - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-
-    return frame
-cap = cv2.VideoCapture(0)
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-
-while True:
-    ret, image = cap.read()
-    if not ret:
-        print("Cannot access webcam")
-        break
-    
-
-    result = face_rec(image, 0.6)
-    cv2.imshow("Face Recognition", result)  
-
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-
+            image_final = recognizer.face_rec(image)   
+            cv2.imshow("face recognition",image_final)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
 cap.release()
 cv2.destroyAllWindows()
